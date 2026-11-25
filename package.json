@@ -1,0 +1,46 @@
+{
+  "name": "splitly",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "setup": "tsx scripts/setup.ts",
+    "db:migrate": "tsx scripts/setup.ts --no-demo",
+    "seed": "tsx scripts/setup.ts --seed",
+    "db:reset": "tsx scripts/setup.ts --reset",
+    "db:import-sqlite": "tsx scripts/import-sqlite.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run lint && npm test"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.6.0",
+    "next": "16.4.6",
+    "nodemailer": "^10.6.1",
+    "postgres": "^4.1.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "recharts": "^3.11.1",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "4.3.3",
+    "@types/node": "^24.19.2",
+    "@types/nodemailer": "^8.0.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.6",
+    "tailwindcss": "4.3.3",
+    "tsx": "^4.23.15",
+    "typescript": "^5",
+    "vitest": "^5.1.1"
+  },
+  "description": "Splitly — a personal expense-splitting web app (Next.js + Postgres)",
+  "engines": {
+    "node": ">=22.13"
+  }
+}
