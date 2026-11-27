@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import * as svc from "@/lib/services";
@@ -6,11 +7,24 @@ import { ActionForm } from "@/components/action-form";
 
 export default async function InvitePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const group = await svc.getGroupByInvite(token);
-  if (!group) notFound();
+  const invite = await svc.getInvite(token);
+  if (!invite) notFound();
+  const { group } = invite;
   const user = await getCurrentUser();
-  const members = await svc.groupMembers(group.id);
   const already = user ? await svc.isMember(group.id, user.id) : false;
+  if (invite.expired && !already)
+    return (
+      <div className="mx-auto mt-10 max-w-md card text-center" data-testid="invite-link-expired">
+        <p className="text-4xl">⏳</p>
+        <h1 className="h1 mt-2">This invite link has expired</h1>
+        <p className="muted mt-2">
+          Invite links work for 7 days. Ask someone in the group to send you a new link — they can get one from the
+          group&apos;s Invite section.
+        </p>
+        <Link href={user ? "/" : "/login"} className="btn mt-6 w-full">{user ? "Go to Splitly" : "Sign in"}</Link>
+      </div>
+    );
+  const members = await svc.groupMembers(group.id);
   return (
     <div className="mx-auto mt-10 max-w-md card text-center">
       <p className="text-4xl">{svc.groupIcon(group.type)}</p>

@@ -22,7 +22,7 @@ describe("db layer", () => {
 
   it("applies every migration once and seeds categories", async () => {
     const versions = await all<{ version: number }>("SELECT version FROM schema_migrations ORDER BY version");
-    expect(versions.map((v) => v.version)).toEqual([1, 2, 3]);
+    expect(versions.map((v) => v.version)).toEqual([1, 2, 3, 4]);
     expect((await get<{ n: number }>("SELECT COUNT(*) AS n FROM categories"))!.n).toBe(33);
   });
 

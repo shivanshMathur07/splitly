@@ -148,6 +148,17 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS upi_name TEXT;
 ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_method TEXT;
 `,
   },
+  {
+    // Additive: shareable group links now expire 7 days after they're created or reset.
+    // Existing links get a fresh 7 days from the moment this runs.
+    version: 4,
+    name: "group invite link expiry",
+    sql: `
+ALTER TABLE groups ADD COLUMN IF NOT EXISTS invite_expires_at TEXT;
+UPDATE groups SET invite_expires_at = to_char((now() AT TIME ZONE 'UTC') + interval '7 days', 'YYYY-MM-DD HH24:MI:SS')
+  WHERE invite_expires_at IS NULL;
+`,
+  },
 ];
 
 // Category tree: 6 parents, original names and emoji icons.

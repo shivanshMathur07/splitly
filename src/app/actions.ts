@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
-import { appUrl, checkLoginRateLimit, createMagicLink, destroySession, getCurrentUser, requireUser, safeNext, type User } from "@/lib/auth";
+import { appUrl, checkLoginRateLimit, createMagicLink, destroySession, getCurrentUser, INVITE_LINK_MINUTES, requireUser, safeNext, type User } from "@/lib/auth";
 import { notifyPayments } from "@/lib/payment-mail";
 import { hitRateLimit } from "@/lib/rate-limit";
 import { devMailboxEnabled, linkEmail, MailNotConfiguredError, sendMail } from "@/lib/mail";
@@ -84,7 +84,7 @@ async function sendInvite(inviter: User, invitee: svc.UserRow, group: svc.GroupR
   if (await hitRateLimit("invite:user", String(inviter.id), { max: 30, windowSeconds: 60 * 60 }))
     throw new svc.SplitError("You've sent a lot of invites in the last hour. Please try again later.");
   const next = group ? `/groups/${group.id}` : `/friends/${inviter.id}`;
-  const url = await createMagicLink(invitee.email, next);
+  const url = await createMagicLink(invitee.email, next, INVITE_LINK_MINUTES);
   const who = svc.displayName(inviter);
   const mail = linkEmail({
     heading: group ? `${who} added you to "${group.name}"` : `${who} wants to split expenses with you`,
@@ -93,7 +93,7 @@ async function sendInvite(inviter: User, invitee: svc.UserRow, group: svc.GroupR
       : `${who} added you as a friend on Splitly, a simple way to share bills. Click below to sign in — no password needed.`,
     cta: group ? "Open the group" : "Join Splitly",
     url,
-    footer: "This magic link signs you in and expires in 30 minutes. You can always request a new one from the sign-in page.",
+    footer: "This magic link signs you in, works once, and expires in 7 days. You can always request a new one from the sign-in page.",
   });
   await sendMail({ to: invitee.email, subject: group ? `You've been added to ${group.name} on Splitly` : `${who} invited you to Splitly`, ...mail });
 }
@@ -155,8 +155,12 @@ export async function inviteToGroupAction(_prev: FormState, fd: FormData): Promi
 
 export async function joinGroupAction(fd: FormData) {
   const user = await requireUser();
-  const group = await svc.getGroupByInvite(str(fd, "token"));
-  if (!group) redirect("/");
+  const token = str(fd, "token");
+  const invite = await svc.getInvite(token);
+  if (!invite) redirect("/");
+  // An expired link can't add new members; existing members can still open their group.
+  if (invite.expired && !await svc.isMember(invite.group.id, user.id)) redirect(`/invite/${encodeURIComponent(token)}`);
+  const group = invite.group;
   await svc.addMember(group.id, user.id, user.id);
   redirect(`/groups/${group.id}`);
 }

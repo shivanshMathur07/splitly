@@ -137,11 +137,28 @@ export interface GroupRow {
   default_currency: string;
   simplify_debts: number;
   invite_token: string;
+  /** UTC "YYYY-MM-DD HH:MM:SS"; null only for groups created by an older deployment. */
+  invite_expires_at?: string | null;
   created_by: number;
   created_at: string;
 }
 
 const newInviteToken = () => crypto.randomBytes(12).toString("base64url");
+
+/** Shareable group links last 7 days from creation / reset. */
+export const GROUP_INVITE_DAYS = 7;
+const utcSql = (d: Date) => d.toISOString().replace("T", " ").slice(0, 19);
+const inviteExpiry = (from: Date = new Date()) => utcSql(new Date(from.getTime() + GROUP_INVITE_DAYS * 86400_000));
+
+/** When a group's shareable link stops working (UTC SQL text). */
+export function groupInviteExpiresAt(g: Pick<GroupRow, "invite_expires_at" | "created_at">): string {
+  if (g.invite_expires_at) return g.invite_expires_at;
+  // Group made by a deployment that predates expiry: 7 days from creation.
+  return inviteExpiry(new Date(`${g.created_at.replace(" ", "T")}Z`));
+}
+
+export const isGroupInviteExpired = (g: Pick<GroupRow, "invite_expires_at" | "created_at">, now: Date = new Date()) =>
+  groupInviteExpiresAt(g) <= utcSql(now);
 
 export async function createGroup(actorId: number, input: { name: string; type: string; currency: string; simplify: boolean }): Promise<number> {
   const name = input.name.trim().slice(0, 80);
@@ -150,12 +167,13 @@ export async function createGroup(actorId: number, input: { name: string; type: 
   if (!isCurrency(input.currency)) throw new SplitError("Unknown currency");
   return await tx(async () => {
     const id = await insert(
-      "INSERT INTO groups (name, type, default_currency, simplify_debts, invite_token, created_by) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO groups (name, type, default_currency, simplify_debts, invite_token, invite_expires_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
       name,
       input.type,
       input.currency,
       input.simplify ? 1 : 0,
       newInviteToken(),
+      inviteExpiry(),
       actorId,
     );
     await run("INSERT INTO group_members (group_id, user_id) VALUES (?, ?)", id, actorId);
@@ -181,8 +199,18 @@ export async function getGroupForUser(groupId: number, userId: number): Promise<
   return await get<GroupRow>("SELECT * FROM groups WHERE id = ?", groupId) ?? null;
 }
 
+/** Look up a shareable link. Returns null for unknown tokens; `expired` once its 7 days are up. */
+export async function getInvite(token: string): Promise<{ group: GroupRow; expired: boolean; expiresAt: string } | null> {
+  if (!token) return null;
+  const group = await get<GroupRow>("SELECT * FROM groups WHERE invite_token = ?", token);
+  if (!group) return null;
+  return { group, expired: isGroupInviteExpired(group), expiresAt: groupInviteExpiresAt(group) };
+}
+
+/** The group for a still-valid shareable link, else null. */
 export async function getGroupByInvite(token: string) {
-  return await get<GroupRow>("SELECT * FROM groups WHERE invite_token = ?", token) ?? null;
+  const inv = await getInvite(token);
+  return inv && !inv.expired ? inv.group : null;
 }
 
 export async function groupMembers(groupId: number): Promise<UserRow[]> {
@@ -221,7 +249,7 @@ export async function updateGroup(groupId: number, actorId: number, input: { nam
 
 export async function regenerateInvite(groupId: number, actorId: number) {
   if (!await isMember(groupId, actorId)) throw new SplitError("Group not found");
-  await run("UPDATE groups SET invite_token = ? WHERE id = ?", newInviteToken(), groupId);
+  await run("UPDATE groups SET invite_token = ?, invite_expires_at = ? WHERE id = ?", newInviteToken(), inviteExpiry(), groupId);
 }
 
 // ───────────────────────── categories ─────────────────────────

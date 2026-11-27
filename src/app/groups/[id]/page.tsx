@@ -13,6 +13,7 @@ import { Avatar } from "@/components/ui";
 import { SheetButton } from "@/components/bottom-sheet";
 import { ShareButton } from "@/components/share-button";
 import { SetTitle } from "@/components/shell/page-title";
+import { formatDateTimeIST } from "@/lib/time";
 import { ChartPie, UserPlus } from "lucide-react";
 
 export default async function GroupPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ deleted?: string }> }) {
@@ -27,6 +28,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const activity = await svc.listActivity(user.id, { groupId: group.id, limit: 10 });
   const upi = await svc.upiProfiles(members.map((m) => m.id));
   const inviteUrl = `${await appUrl()}/invite/${group.invite_token}`;
+  const invite = { url: inviteUrl, expiresAt: svc.groupInviteExpiresAt(group), expired: svc.isGroupInviteExpired(group) };
 
   return (
     <div className="space-y-4 md:space-y-6">
@@ -46,7 +48,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
       {/* Mobile: quick actions + swipeable member balances. */}
       <div className="flex gap-2 md:hidden">
         <SheetButton label="Invite" title="Invite friends" className="btn-secondary flex-1" testId="sheet-invite" icon={<UserPlus size={18} />}>
-          <InviteContent groupId={group.id} groupName={group.name} inviteUrl={inviteUrl} />
+          <InviteContent groupId={group.id} groupName={group.name} invite={invite} />
         </SheetButton>
         <Link href={`/insights?group=${group.id}`} className="btn-secondary flex-1"><ChartPie size={18} /> Charts</Link>
       </div>
@@ -122,7 +124,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
 
           <section className="card hidden space-y-4 md:block">
             <h2 className="h2">Invite friends</h2>
-            <InviteContent groupId={group.id} groupName={group.name} inviteUrl={inviteUrl} />
+            <InviteContent groupId={group.id} groupName={group.name} invite={invite} />
           </section>
 
           <section className="card">
@@ -154,26 +156,39 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   );
 }
 
-function InviteContent({ groupId, groupName, inviteUrl }: { groupId: number; groupName: string; inviteUrl: string }) {
+function InviteContent({ groupId, groupName, invite }: { groupId: number; groupName: string; invite: { url: string; expiresAt: string; expired: boolean } }) {
+  const inviteUrl = invite.url;
   return (
     <div className="space-y-4">
       <ActionForm action={inviteToGroupAction} submitLabel="Send magic link" className="space-y-2" submitClassName="btn w-full sm:w-auto">
         <input type="hidden" name="groupId" value={groupId} />
         <input name="name" placeholder="Name (optional)" className="input" autoComplete="off" />
         <input name="email" type="email" inputMode="email" autoComplete="off" required placeholder="friend@example.com" className="input" />
+        <p className="text-xs text-slate-400">They get a one-time sign-in link that works for 7 days.</p>
       </ActionForm>
       <div>
         <p className="label">Or share the invite link</p>
-        <div className="flex gap-2">
-          <input readOnly value={inviteUrl} className="input min-w-0 font-mono text-xs md:text-xs" data-testid="invite-link" aria-label="Invite link" />
-          <CopyButton text={inviteUrl} />
-        </div>
-        <div className="mt-2 md:hidden">
-          <ShareButton url={inviteUrl} title={`Join ${groupName} on Splitly`} text={`Join "${groupName}" on Splitly to split expenses with me.`} />
-        </div>
+        {invite.expired ? (
+          <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800" data-testid="invite-expired">
+            This link expired on {formatDateTimeIST(invite.expiresAt)}. Get a new one to invite people.
+          </p>
+        ) : (
+          <>
+            <div className="flex gap-2">
+              <input readOnly value={inviteUrl} className="input min-w-0 font-mono text-xs md:text-xs" data-testid="invite-link" aria-label="Invite link" />
+              <CopyButton text={inviteUrl} />
+            </div>
+            <div className="mt-2 md:hidden">
+              <ShareButton url={inviteUrl} title={`Join ${groupName} on Splitly`} text={`Join "${groupName}" on Splitly to split expenses with me.`} />
+            </div>
+            <p className="mt-2 text-xs text-slate-400" data-testid="invite-expiry">Link works until {formatDateTimeIST(invite.expiresAt)}</p>
+          </>
+        )}
         <form action={regenerateInviteAction} className="mt-1">
           <input type="hidden" name="groupId" value={groupId} />
-          <button className="min-h-11 text-xs text-slate-500 hover:underline md:min-h-0">Reset link</button>
+          <button className={invite.expired ? "btn-secondary mt-2 w-full sm:w-auto" : "min-h-11 text-xs text-slate-500 hover:underline md:min-h-0"}>
+            {invite.expired ? "Get a new link (7 days)" : "Reset link (new 7 days)"}
+          </button>
         </form>
       </div>
     </div>

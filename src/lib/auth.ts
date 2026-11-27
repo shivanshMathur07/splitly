@@ -7,7 +7,10 @@ import { hitRateLimit } from "./rate-limit";
 
 export const SESSION_COOKIE = "splitly_session";
 const SESSION_DAYS = 30;
-const TOKEN_MINUTES = 30;
+/** Self sign-in links: 30 minutes. */
+export const SIGN_IN_LINK_MINUTES = 30;
+/** Links emailed to someone you invite (friend or group): 7 days. */
+export const INVITE_LINK_MINUTES = 7 * 24 * 60;
 
 export interface User {
   id: number;
@@ -72,14 +75,16 @@ export function safeNext(next: string | null | undefined): string {
   return next;
 }
 
-export async function createMagicLink(email: string, next?: string): Promise<string> {
+/** Single-use sign-in link. `ttlMinutes` defaults to the 30-minute self sign-in window. */
+export async function createMagicLink(email: string, next?: string, ttlMinutes: number = SIGN_IN_LINK_MINUTES): Promise<string> {
+  if (!(ttlMinutes > 0)) throw new Error("ttlMinutes must be positive");
   const token = randomToken();
   await run(
     "INSERT INTO login_tokens (token_hash, email, next_path, expires_at) VALUES (?, ?, ?, ?)",
     sha256(token),
     email.trim().toLowerCase(),
     safeNext(next),
-    sqlTime(new Date(Date.now() + TOKEN_MINUTES * 60_000)),
+    sqlTime(new Date(Date.now() + ttlMinutes * 60_000)),
   );
   const url = new URL("/auth/verify", await appUrl());
   url.searchParams.set("token", token);
