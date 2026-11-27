@@ -38,11 +38,13 @@ export function BalanceLine({ cents, currency }: { cents: number; currency: stri
   );
 }
 
-export function Empty({ title, children }: { title: string; children?: React.ReactNode }) {
+export function Empty({ title, children, icon, action }: { title: string; children?: React.ReactNode; icon?: string; action?: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center">
-      <p className="font-medium text-slate-700">{title}</p>
-      {children && <div className="mt-1 text-sm text-slate-500">{children}</div>}
+    <div className="flex flex-col items-center rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 px-4 py-8 text-center">
+      {icon && <span className="mb-2 grid h-12 w-12 place-items-center rounded-2xl bg-white text-2xl shadow-sm ring-1 ring-slate-200" aria-hidden>{icon}</span>}
+      <p className="font-semibold text-slate-700">{title}</p>
+      {children && <div className="mt-1 max-w-xs text-sm text-slate-500">{children}</div>}
+      {action && <div className="mt-4">{action}</div>}
     </div>
   );
 }

@@ -59,6 +59,7 @@ export function ExpenseForm({
   defaultGroupId,
   defaultCurrency,
   initial,
+  inSheet = false,
 }: {
   me: Person;
   groups: GroupOption[];
@@ -67,6 +68,8 @@ export function ExpenseForm({
   defaultGroupId: number | null;
   defaultCurrency: string;
   initial?: ExpenseInitial;
+  /** Rendered inside a bottom sheet: pins the submit button to the sheet's bottom edge. */
+  inSheet?: boolean;
 }) {
   const [groupId, setGroupId] = useState<number | null>(initial ? initial.groupId : defaultGroupId);
   const group = groups.find((g) => g.id === groupId) ?? null;
@@ -176,15 +179,15 @@ export function ExpenseForm({
         </div>
         <div className="sm:col-span-2">
           <label className="label" htmlFor="description">Description</label>
-          <input id="description" className="input" required maxLength={120} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Dinner at the beach shack" />
+          <input id="description" className="input" data-autofocus required enterKeyHint="next" maxLength={120} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Dinner at the beach shack" />
         </div>
         <div>
           <label className="label" htmlFor="amount">Amount</label>
           <div className="flex gap-2">
-            <select aria-label="Currency" className="input w-28" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+            <select aria-label="Currency" className="input w-24 shrink-0 md:w-28" value={currency} onChange={(e) => setCurrency(e.target.value)}>
               {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code}</option>)}
             </select>
-            <input id="amount" className="input text-lg font-semibold" inputMode="decimal" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+            <input id="amount" className="input money min-w-0 text-lg font-semibold" inputMode="decimal" enterKeyHint="next" autoComplete="off" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -207,10 +210,10 @@ export function ExpenseForm({
         </div>
       </div>
 
-      <fieldset className="rounded-xl border border-slate-200 p-4">
+      <fieldset className="min-w-0 rounded-xl border border-slate-200 p-3 md:p-4">
         <legend className="px-1 text-sm font-semibold">Paid by</legend>
         <div className="flex flex-wrap items-center gap-3">
-          <select aria-label="Payer" className="input w-auto" value={payerMode === "multi" ? "multi" : payerId} onChange={(e) => {
+          <select aria-label="Payer" className="input w-full sm:w-auto" value={payerMode === "multi" ? "multi" : payerId} onChange={(e) => {
             if (e.target.value === "multi") setPayerMode("multi");
             else { setPayerMode("single"); setPayerId(Number(e.target.value)); }
           }}>
@@ -227,15 +230,15 @@ export function ExpenseForm({
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {people.map((p) => (
               <label key={p.id} className="flex items-center gap-2 text-sm">
-                <span className="w-28 truncate">{nameOf(p.id)}</span>
-                <input className="input" inputMode="decimal" placeholder="0.00" value={payerAmounts[p.id] ?? ""} onChange={(e) => setPayerAmounts({ ...payerAmounts, [p.id]: e.target.value })} />
+                <span className="w-24 shrink-0 truncate md:w-28">{nameOf(p.id)}</span>
+                <input className="input money min-w-0" inputMode="decimal" placeholder="0.00" value={payerAmounts[p.id] ?? ""} onChange={(e) => setPayerAmounts({ ...payerAmounts, [p.id]: e.target.value })} />
               </label>
             ))}
           </div>
         )}
       </fieldset>
 
-      <fieldset className="rounded-xl border border-slate-200 p-4">
+      <fieldset className="min-w-0 rounded-xl border border-slate-200 p-3 md:p-4">
         <legend className="px-1 text-sm font-semibold">Split</legend>
         <div className="flex flex-wrap gap-1" role="tablist">
           {SPLIT_TYPES.map((s) => (
@@ -246,7 +249,7 @@ export function ExpenseForm({
               aria-selected={splitType === s.value}
               data-split={s.value}
               onClick={() => { setSplitType(s.value); setValues({}); }}
-              className={`rounded-full px-3 py-1.5 text-sm ${splitType === s.value ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
+              className={`min-h-10 rounded-full px-3.5 py-1.5 text-sm font-medium md:min-h-0 ${splitType === s.value ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
             >
               {s.label}
             </button>
@@ -258,14 +261,14 @@ export function ExpenseForm({
             const on = included.includes(p.id);
             const idx = participants.indexOf(p.id);
             return (
-              <li key={p.id} className="flex items-center gap-3 py-2">
-                <input type="checkbox" checked={on} onChange={() => toggle(p.id)} className="h-4 w-4 accent-brand-600" aria-label={`Include ${nameOf(p.id)}`} />
-                <span className="flex-1 text-sm">{nameOf(p.id)}</span>
+              <li key={p.id} className="flex min-h-12 items-center gap-2 py-1.5 md:gap-3">
+                <input type="checkbox" checked={on} onChange={() => toggle(p.id)} className="h-5 w-5 shrink-0 accent-brand-600 md:h-4 md:w-4" aria-label={`Include ${nameOf(p.id)}`} />
+                <span className="min-w-0 flex-1 truncate text-sm">{nameOf(p.id)}</span>
                 {on && splitType !== "equal" && (
                   <div className="flex items-center gap-1">
                     {splitType === "adjustment" && <span className="text-xs text-slate-400">±</span>}
                     <input
-                      className="input w-28 text-right"
+                      className="input money w-20 text-right md:w-28"
                       inputMode="decimal"
                       data-person={p.id}
                       value={values[p.id] ?? ""}
@@ -275,7 +278,7 @@ export function ExpenseForm({
                     <span className="w-6 text-xs text-slate-400">{splitType === "percent" ? "%" : splitType === "shares" ? "sh" : ""}</span>
                   </div>
                 )}
-                <span className="w-28 text-right text-sm tabular-nums text-slate-600">{on && preview && idx >= 0 ? formatMoney(preview[idx], currency) : ""}</span>
+                <span className="w-20 shrink-0 text-right text-sm tabular-nums text-slate-600 md:w-28">{on && preview && idx >= 0 ? formatMoney(preview[idx], currency) : ""}</span>
               </li>
             );
           })}
@@ -288,8 +291,8 @@ export function ExpenseForm({
         <textarea id="notes" className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
 
-      <div className="flex items-center gap-3">
-        <button className="btn" disabled={pending}>{pending ? "Saving…" : initial ? "Save changes" : "Add expense"}</button>
+      <div className={inSheet ? "sticky bottom-0 -mx-5 flex flex-col gap-2 border-t border-slate-100 bg-white/95 px-5 pb-1 pt-3 backdrop-blur md:static md:mx-0 md:flex-row md:items-center md:border-0 md:p-0" : "flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3"}>
+        <button className="btn w-full sm:w-auto" disabled={pending}>{pending ? "Saving…" : initial ? "Save changes" : "Add expense"}</button>
         {error && <p className="text-sm text-rose-600" role="alert">{error}</p>}
       </div>
     </form>

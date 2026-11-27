@@ -15,16 +15,16 @@ export default async function ExpensePage({ params }: { params: Promise<{ id: st
   const back = e.group_id ? `/groups/${e.group_id}` : "/";
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <Link href={back} className="text-sm text-slate-500 hover:underline">← {e.group_name ?? "Dashboard"}</Link>
+      <Link href={back} className="inline-flex min-h-11 items-center text-sm text-slate-500 hover:underline md:min-h-0">← {e.group_name ?? "Dashboard"}</Link>
       <div className="card">
         {e.deleted_at && <p className="mb-3 rounded-lg bg-rose-50 p-2 text-sm text-rose-700">This expense was deleted.</p>}
-        <div className="flex items-start gap-4">
-          <span className="grid h-14 w-14 place-items-center rounded-2xl text-3xl" style={{ background: `${e.category?.color ?? "#64748b"}1a` }}>
+        <div className="flex items-start gap-3 md:gap-4">
+          <span className="grid h-12 w-12 shrink-0 place-items-center md:h-14 md:w-14 rounded-2xl text-3xl" style={{ background: `${e.category?.color ?? "#64748b"}1a` }}>
             {e.is_payment ? "💸" : e.category?.icon}
           </span>
-          <div className="flex-1">
-            <h1 className="h1">{e.description}</h1>
-            <p className="text-2xl font-bold text-slate-900">{formatMoney(e.amount_cents, e.currency)}</p>
+          <div className="min-w-0 flex-1">
+            <h1 className="h1 break-words">{e.description}</h1>
+            <p className="money text-2xl font-bold text-slate-900">{formatMoney(e.amount_cents, e.currency)}</p>
             <p className="muted mt-1">
               {fmtDate(e.date)} · {e.is_payment ? "Payment" : `${e.category?.name ?? "General"} · split ${SPLIT_TYPES.find((s) => s.value === e.split_type)?.label.toLowerCase()}`}
             </p>
@@ -36,8 +36,8 @@ export default async function ExpensePage({ params }: { params: Promise<{ id: st
           {e.shares.map((s) => (
             <li key={s.userId} className="flex items-center gap-3 py-2 text-sm">
               <Avatar id={s.userId} name={s.name} size={28} />
-              <span className="flex-1">{s.userId === user.id ? "You" : s.name}</span>
-              <span className="text-slate-500">
+              <span className="min-w-0 flex-1 truncate">{s.userId === user.id ? "You" : s.name}</span>
+              <span className="money shrink-0 text-right text-slate-500">
                 {s.paid > 0 && <>paid <b className="text-slate-800">{formatMoney(s.paid, e.currency)}</b>{s.owed > 0 && " · "}</>}
                 {s.owed > 0 && <>{e.is_payment ? "received" : s.userId === user.id ? "owe" : "owes"} <b className="text-slate-800">{formatMoney(s.owed, e.currency)}</b></>}
               </span>

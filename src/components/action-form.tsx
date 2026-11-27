@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import Link from "next/link";
 import type { FormState } from "@/app/actions";
 
@@ -19,8 +19,13 @@ export function ActionForm({
   submitClassName?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, {} as FormState);
+  const ref = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    // Lets a surrounding bottom sheet close itself after a successful submit.
+    if (state.message && !state.error) ref.current?.dispatchEvent(new CustomEvent("actionform:success", { bubbles: true }));
+  }, [state]);
   return (
-    <form action={formAction} className={className}>
+    <form ref={ref} action={formAction} className={className}>
       {children}
       <div className="flex flex-wrap items-center gap-3">
         <button className={submitClassName} disabled={pending}>

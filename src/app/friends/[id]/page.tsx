@@ -7,6 +7,7 @@ import { settleFriendAction } from "@/app/actions";
 import { ActionForm } from "@/components/action-form";
 import { ExpenseList } from "@/components/expense-list";
 import { Avatar } from "@/components/ui";
+import { SetTitle } from "@/components/shell/page-title";
 
 export default async function FriendPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
@@ -17,14 +18,15 @@ export default async function FriendPage({ params }: { params: Promise<{ id: str
   const expenses = await svc.listSharedExpenses(user.id, friend.id);
   const name = svc.displayName(friend);
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-4">
-        <Avatar id={friend.id} name={name} size={56} />
-        <div className="flex-1">
-          <h1 className="h1">{name}</h1>
-          <p className="muted">{friend.email}{!friend.joined_at && " · hasn't signed in yet"}</p>
+    <div className="space-y-4 md:space-y-6">
+      <SetTitle title={name} />
+      <div className="flex items-center gap-3 md:gap-4">
+        <Avatar id={friend.id} name={name} size={52} />
+        <div className="min-w-0 flex-1">
+          <h1 className="h1 truncate">{name}</h1>
+          <p className="muted truncate">{friend.email}{!friend.joined_at && " · hasn't signed in yet"}</p>
         </div>
-        <Link href="/expenses/new" className="btn">Add expense</Link>
+        <Link href="/expenses/new" className="btn hidden md:inline-flex">Add expense</Link>
       </div>
       <section className="card space-y-3">
         <h2 className="h2">Balance</h2>
@@ -33,7 +35,7 @@ export default async function FriendPage({ params }: { params: Promise<{ id: str
           <div key={c} className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 p-3">
             <p className="flex-1 text-sm">
               {v > 0 ? <>{name} owes you </> : <>You owe {name} </>}
-              <b className={v > 0 ? "text-emerald-600" : "text-orange-600"}>{formatMoney(Math.abs(v), c)}</b>
+              <b className={`money ${v > 0 ? "text-emerald-600" : "text-orange-600"}`}>{formatMoney(Math.abs(v), c)}</b>
               <span className="text-xs text-slate-400"> (across all groups)</span>
             </p>
             <ActionForm action={settleFriendAction} submitLabel="Settle up" submitClassName="btn btn-sm" className="flex items-center gap-2">
