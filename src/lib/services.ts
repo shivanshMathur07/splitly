@@ -4,6 +4,7 @@ import { all, get, insert, run, tx } from "./db";
 import { buildShares, computeOwed, SplitError, type ShareRow, type SplitType } from "./split";
 import { netBalances, pairwiseDebts, simplifyDebts, type Transfer } from "./debts";
 import { formatMoney, isCurrency } from "./money";
+import { isValidVpa, normalizeVpa } from "./upi";
 import { GENERAL_CATEGORY_ID } from "./schema";
 
 export { SplitError };
@@ -37,10 +38,30 @@ export async function findOrCreateUser(email: string, name?: string | null): Pro
   return (await get<UserRow>("SELECT id, email, name, default_currency, joined_at FROM users WHERE email = ?", e))!;
 }
 
-export async function updateProfile(userId: number, name: string, currency: string) {
+export async function updateProfile(userId: number, name: string, currency: string, upi?: { id: string; name: string }) {
   if (!name.trim()) throw new SplitError("Please enter your name");
   if (!isCurrency(currency)) throw new SplitError("Unknown currency");
   await run("UPDATE users SET name = ?, default_currency = ? WHERE id = ?", name.trim().slice(0, 60), currency, userId);
+  if (upi) {
+    const id = normalizeVpa(upi.id);
+    if (id && !isValidVpa(id)) throw new SplitError(`"${upi.id.trim()}" doesn't look like a UPI ID (it should be like name@okaxis)`);
+    await run("UPDATE users SET upi_id = ?, upi_name = ? WHERE id = ?", id || null, upi.name.trim().slice(0, 50) || null, userId);
+  }
+}
+
+export interface UpiProfile {
+  id: number;
+  upi_id: string | null;
+  upi_name: string | null;
+}
+
+/** UPI details for a set of users (kept out of UserRow so old queries stay unchanged). */
+export async function upiProfiles(ids: number[]): Promise<Map<number, UpiProfile>> {
+  const out = new Map<number, UpiProfile>();
+  if (!ids.length) return out;
+  const rows = await all<UpiProfile>(`SELECT id, upi_id, upi_name FROM users WHERE id IN (${ids.map(() => "?").join(",")})`, ...ids);
+  for (const r of rows) out.set(r.id, r);
+  return out;
 }
 
 export async function makeFriends(a: number, b: number) {
@@ -361,7 +382,12 @@ export async function setExpenseDeleted(actorId: number, id: number, deleted: bo
   return e;
 }
 
-export async function recordPayment(actorId: number, input: { groupId: number | null; from: number; to: number; amount: number; currency: string; date?: string; note?: string }): Promise<number> {
+export type PaymentMethod = "manual" | "upi";
+
+export async function recordPayment(
+  actorId: number,
+  input: { groupId: number | null; from: number; to: number; amount: number; currency: string; date?: string; note?: string; method?: PaymentMethod },
+): Promise<number> {
   if (input.from === input.to) throw new SplitError("Pick two different people");
   if (!Number.isSafeInteger(input.amount) || input.amount <= 0) throw new SplitError("Enter an amount greater than zero");
   if (!isCurrency(input.currency)) throw new SplitError("Unknown currency");
@@ -375,8 +401,8 @@ export async function recordPayment(actorId: number, input: { groupId: number | 
   const to = (await getUser(input.to))!;
   return await tx(async () => {
     const id = await insert(
-      `INSERT INTO expenses (group_id, description, amount_cents, currency, date, category_id, notes, is_payment, split_type, created_by)
-       VALUES (?, 'Payment', ?, ?, ?, ?, ?, 1, 'exact', ?)`,
+      `INSERT INTO expenses (group_id, description, amount_cents, currency, date, category_id, notes, is_payment, split_type, created_by, payment_method)
+       VALUES (?, 'Payment', ?, ?, ?, ?, ?, 1, 'exact', ?, ?)`,
       input.groupId,
       input.amount,
       input.currency,
@@ -384,6 +410,7 @@ export async function recordPayment(actorId: number, input: { groupId: number | 
       GENERAL_CATEGORY_ID,
       input.note || null,
       actorId,
+      input.method ?? "manual",
     );
     // payer "paid" the amount, receiver "owes" it: payer's balance goes up, receiver's down
     await writeShares(id, [
@@ -535,7 +562,7 @@ export async function friendBalances(userId: number): Promise<Map<number, Record
  * payment per group where they have a debt (respecting simplify) plus one for
  * non-group expenses. Returns the number of payments recorded.
  */
-export async function settleWithFriend(userId: number, friendId: number, currency: string): Promise<number> {
+export async function settleWithFriend(userId: number, friendId: number, currency: string, method: PaymentMethod = "manual"): Promise<number[]> {
   if (!await areFriends(userId, friendId)) throw new SplitError("Not a friend");
   const payments: { groupId: number | null; from: number; to: number; amount: number }[] = [];
   const pick = (ts: Transfer[], groupId: number | null) => {
@@ -549,8 +576,9 @@ export async function settleWithFriend(userId: number, friendId: number, currenc
   }
   const direct = await loadLedger("e.group_id IS NULL AND e.currency = ? AND e.id IN (SELECT expense_id FROM expense_shares WHERE user_id = ?)", currency, userId);
   pick(pairwiseDebts(direct), null);
-  for (const p of payments) await recordPayment(userId, { ...p, currency });
-  return payments.length;
+  const ids: number[] = [];
+  for (const p of payments) ids.push(await recordPayment(userId, { ...p, currency, method }));
+  return ids;
 }
 
 /** Totals per currency: what the user is owed and what they owe overall. */

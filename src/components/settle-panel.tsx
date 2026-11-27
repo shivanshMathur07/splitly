@@ -1,13 +1,28 @@
 import { ArrowRight, HandCoins } from "lucide-react";
 import { recordPaymentAction, toggleSimplifyAction } from "@/app/actions";
-import type { CurrencyBalances, GroupRow, UserRow } from "@/lib/services";
+import type { CurrencyBalances, GroupRow, UpiProfile, UserRow } from "@/lib/services";
+import { buildUpiUri, isValidVpa, upiNote } from "@/lib/upi";
+import { UpiPayButton } from "./upi-pay";
+import { UpiMissing } from "./upi-missing";
 import { displayName } from "@/lib/services";
 import { CURRENCIES, centsToInput, formatMoney } from "@/lib/money";
 import { ActionForm } from "./action-form";
 import { SheetButton } from "./bottom-sheet";
 import { Avatar } from "./ui";
 
-export function SettlePanel({ group, balances, members, userId }: { group: GroupRow; balances: CurrencyBalances[]; members: UserRow[]; userId: number }) {
+export function SettlePanel({
+  group,
+  balances,
+  members,
+  userId,
+  upi = new Map(),
+}: {
+  group: GroupRow;
+  balances: CurrencyBalances[];
+  members: UserRow[];
+  userId: number;
+  upi?: Map<number, UpiProfile>;
+}) {
   const name = (id: number) => {
     if (id === userId) return "You";
     const m = members.find((x) => x.id === id);
@@ -47,7 +62,7 @@ export function SettlePanel({ group, balances, members, userId }: { group: Group
                   </>
                 );
                 return (
-                  <li key={`${t.from}-${t.to}`} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3">
+                  <li key={`${t.from}-${t.to}`} className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 p-3">
                     <div className="flex shrink-0 items-center -space-x-2">
                       <Avatar id={t.from} name={name(t.from)} size={30} />
                       <span className="z-10 grid h-5 w-5 place-items-center rounded-full bg-white text-slate-400 ring-1 ring-slate-200"><ArrowRight size={12} /></span>
@@ -94,6 +109,11 @@ export function SettlePanel({ group, balances, members, userId }: { group: Group
                         </div>
                       </ActionForm>
                     </SheetButton>
+                    {t.from === userId && b.currency === "INR" && (
+                      <div className="basis-full">
+                        <UpiAction toId={t.to} toName={name(t.to)} amount={t.amount} groupId={group.id} groupName={group.name} userId={userId} upi={upi} />
+                      </div>
+                    )}
                   </li>
                 );
               })}
@@ -142,5 +162,23 @@ function CustomPaymentForm({ group, members, userId, name, className }: { group:
         </select>
       </div>
     </ActionForm>
+  );
+}
+
+function UpiAction({ toId, toName, amount, groupId, groupName, userId, upi }: { toId: number; toName: string; amount: number; groupId: number; groupName: string; userId: number; upi: Map<number, UpiProfile> }) {
+  const p = upi.get(toId);
+  if (!p?.upi_id || !isValidVpa(p.upi_id)) return <UpiMissing name={toName} userId={toId} />;
+  const payee = p.upi_name || toName;
+  const uri = buildUpiUri({ vpa: p.upi_id, name: payee, amountCents: amount, note: upiNote(groupName) });
+  return (
+    <UpiPayButton
+      uri={uri}
+      payee={payee}
+      vpa={p.upi_id}
+      amountCents={amount}
+      kind="group"
+      hidden={{ groupId, from: userId, to: toId }}
+      className="btn w-full md:w-auto"
+    />
   );
 }

@@ -137,6 +137,17 @@ CREATE INDEX IF NOT EXISTS idx_rate_events ON rate_events(bucket, key, created_a
 CREATE INDEX IF NOT EXISTS idx_login_tokens_email ON login_tokens(email, created_at);
 `,
   },
+  {
+    // Additive only (nullable columns, no rewrites), so a deployment that doesn't know
+    // about these columns keeps working against the same database.
+    version: 3,
+    name: "upi payments",
+    sql: `
+ALTER TABLE users ADD COLUMN IF NOT EXISTS upi_id TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS upi_name TEXT;
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_method TEXT;
+`,
+  },
 ];
 
 // Category tree: 6 parents, original names and emoji icons.

@@ -8,6 +8,9 @@ import { ActionForm } from "@/components/action-form";
 import { ExpenseList } from "@/components/expense-list";
 import { Avatar } from "@/components/ui";
 import { SetTitle } from "@/components/shell/page-title";
+import { UpiPayButton } from "@/components/upi-pay";
+import { UpiMissing } from "@/components/upi-missing";
+import { buildUpiUri, isValidVpa, upiNote } from "@/lib/upi";
 
 export default async function FriendPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
@@ -17,6 +20,7 @@ export default async function FriendPage({ params }: { params: Promise<{ id: str
   const bal = (await svc.friendBalances(user.id)).get(friend.id) ?? {};
   const expenses = await svc.listSharedExpenses(user.id, friend.id);
   const name = svc.displayName(friend);
+  const friendUpi = (await svc.upiProfiles([friend.id])).get(friend.id);
   return (
     <div className="space-y-4 md:space-y-6">
       <SetTitle title={name} />
@@ -42,6 +46,23 @@ export default async function FriendPage({ params }: { params: Promise<{ id: str
               <input type="hidden" name="friendId" value={friend.id} />
               <input type="hidden" name="currency" value={c} />
             </ActionForm>
+            {v < 0 && c === "INR" && (
+              <div className="basis-full">
+                {friendUpi?.upi_id && isValidVpa(friendUpi.upi_id) ? (
+                  <UpiPayButton
+                    uri={buildUpiUri({ vpa: friendUpi.upi_id, name: friendUpi.upi_name || name, amountCents: -v, note: upiNote(`${svc.displayName(user)} settling up`) })}
+                    payee={friendUpi.upi_name || name}
+                    vpa={friendUpi.upi_id}
+                    amountCents={-v}
+                    kind="friend"
+                    hidden={{ friendId: friend.id }}
+                    className="btn w-full md:w-auto"
+                  />
+                ) : (
+                  <UpiMissing name={name} userId={friend.id} />
+                )}
+              </div>
+            )}
           </div>
         ))}
         <p className="text-xs text-slate-400">Settle up records one payment in each group you share (and one for non-group expenses), so group balances stay correct.</p>

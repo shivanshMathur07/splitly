@@ -1,8 +1,10 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
-import { checkLoginRateLimit, createMagicLink, destroySession, getCurrentUser, requireUser, safeNext, type User } from "@/lib/auth";
+import { appUrl, checkLoginRateLimit, createMagicLink, destroySession, getCurrentUser, requireUser, safeNext, type User } from "@/lib/auth";
+import { notifyPayments } from "@/lib/payment-mail";
 import { hitRateLimit } from "@/lib/rate-limit";
 import { devMailboxEnabled, linkEmail, MailNotConfiguredError, sendMail } from "@/lib/mail";
 import { parseAmount } from "@/lib/money";
@@ -62,7 +64,12 @@ export async function saveProfile(_prev: FormState, fd: FormData): Promise<FormS
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   try {
-    await svc.updateProfile(user.id, str(fd, "name"), str(fd, "currency"));
+    await svc.updateProfile(
+      user.id,
+      str(fd, "name"),
+      str(fd, "currency"),
+      fd.has("upi_id") ? { id: str(fd, "upi_id"), name: str(fd, "upi_name") } : undefined,
+    );
   } catch (e) {
     return fail(e);
   }
@@ -247,13 +254,23 @@ export async function deleteExpenseAction(fd: FormData) {
   redirect(e.group_id ? `/groups/${e.group_id}` : "/");
 }
 
+/** Email the recipients after the response is sent; failures are logged, never surfaced. */
+async function emailPaymentsLater(actorId: number, ids: number[]) {
+  if (!ids.length) return;
+  const appBase = await appUrl();
+  after(() => notifyPayments(ids, { actorId, appBase }));
+}
+
+const method = (fd: FormData): svc.PaymentMethod => (str(fd, "method") === "upi" ? "upi" : "manual");
+
 export async function recordPaymentAction(_prev: FormState, fd: FormData): Promise<FormState> {
   const user = await requireUser();
   const amount = parseAmount(str(fd, "amount"));
   if (amount === null || amount <= 0) return { error: "Enter a valid amount" };
+  let id: number;
   try {
     const gid = str(fd, "groupId");
-    await svc.recordPayment(user.id, {
+    id = await svc.recordPayment(user.id, {
       groupId: gid ? Number(gid) : null,
       from: num(fd, "from"),
       to: num(fd, "to"),
@@ -261,10 +278,12 @@ export async function recordPaymentAction(_prev: FormState, fd: FormData): Promi
       currency: str(fd, "currency"),
       date: str(fd, "date") || undefined,
       note: str(fd, "note") || undefined,
+      method: method(fd),
     });
   } catch (e) {
     return fail(e);
   }
+  await emailPaymentsLater(user.id, [id]);
   revalidatePath("/", "layout");
   return { message: "Payment recorded ✓" };
 }
@@ -272,12 +291,68 @@ export async function recordPaymentAction(_prev: FormState, fd: FormData): Promi
 export async function settleFriendAction(_prev: FormState, fd: FormData): Promise<FormState> {
   const user = await requireUser();
   try {
-    const n = await svc.settleWithFriend(user.id, num(fd, "friendId"), str(fd, "currency"));
+    const ids = await svc.settleWithFriend(user.id, num(fd, "friendId"), str(fd, "currency"), method(fd));
+    await emailPaymentsLater(user.id, ids);
     revalidatePath("/", "layout");
+    const n = ids.length;
     return { message: n ? `Recorded ${n} payment${n === 1 ? "" : "s"} ✓` : "Nothing to settle" };
   } catch (e) {
     return fail(e);
   }
+}
+
+/**
+ * "I've paid" after a UPI payment to a friend (friend page). The full balance settles every
+ * shared group like "Settle up"; a partial amount is recorded as one non-group payment.
+ */
+export async function upiFriendPaidAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const friendId = num(fd, "friendId");
+  const currency = str(fd, "currency");
+  const amount = parseAmount(str(fd, "amount"));
+  if (amount === null || amount <= 0) return { error: "Enter a valid amount" };
+  try {
+    const owed = -((await svc.friendBalances(user.id)).get(friendId)?.[currency] ?? 0);
+    const ids =
+      amount === owed
+        ? await svc.settleWithFriend(user.id, friendId, currency, "upi")
+        : [await svc.recordPayment(user.id, { groupId: null, from: user.id, to: friendId, amount, currency, method: "upi" })];
+    await emailPaymentsLater(user.id, ids);
+  } catch (e) {
+    return fail(e);
+  }
+  revalidatePath("/", "layout");
+  return { message: "Payment recorded ✓" };
+}
+
+/** Nudge someone to add their UPI ID. Limited to one per person per day, 10 per hour overall. */
+export async function remindUpiAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const to = await svc.getUser(num(fd, "userId"));
+  if (!to || to.id === user.id) return { error: "Unknown person" };
+  if (!(await svc.areFriends(user.id, to.id))) return { error: "You can only remind friends" };
+  if (await hitRateLimit("upi-remind:pair", `${user.id}:${to.id}`, { max: 1, windowSeconds: 24 * 60 * 60 }))
+    return { error: `You already reminded ${svc.displayName(to)} today.` };
+  if (await hitRateLimit("upi-remind:user", String(user.id), { max: 10, windowSeconds: 60 * 60 }))
+    return { error: "You've sent a lot of reminders. Please try again later." };
+  const who = svc.displayName(user);
+  const url = `${await appUrl()}/profile`;
+  try {
+    await sendMail({
+      to: to.email,
+      subject: `${who} wants to pay you on Splitly`,
+      ...linkEmail({
+        heading: `${who} wants to pay you back`,
+        body: `${who} is trying to settle up with you on Splitly. Add your UPI ID to your profile so they can pay you with one tap from GPay, PhonePe, Paytm or BHIM.`,
+        cta: "Add my UPI ID",
+        url,
+        footer: "Sign in with your email if you're asked to. You can remove your UPI ID any time.",
+      }),
+    });
+  } catch (e) {
+    return fail(e);
+  }
+  return { message: `Reminder sent to ${svc.displayName(to)} ✓`, devMailbox: devMailboxEnabled() };
 }
 
 // ───────── dev ─────────

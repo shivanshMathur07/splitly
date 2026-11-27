@@ -22,7 +22,7 @@ describe("db layer", () => {
 
   it("applies every migration once and seeds categories", async () => {
     const versions = await all<{ version: number }>("SELECT version FROM schema_migrations ORDER BY version");
-    expect(versions.map((v) => v.version)).toEqual([1, 2]);
+    expect(versions.map((v) => v.version)).toEqual([1, 2, 3]);
     expect((await get<{ n: number }>("SELECT COUNT(*) AS n FROM categories"))!.n).toBe(33);
   });
 
@@ -66,8 +66,8 @@ describe("services on Postgres (demo data)", () => {
   it("settling with a friend zeroes the balance", async () => {
     const before = (await svc.friendBalances(1)).get(2); // Asha
     expect(before?.INR).toBeTruthy();
-    const n = await svc.settleWithFriend(1, 2, "INR");
-    expect(n).toBeGreaterThan(0);
+    const ids = await svc.settleWithFriend(1, 2, "INR");
+    expect(ids.length).toBeGreaterThan(0);
     expect((await svc.friendBalances(1)).get(2)?.INR ?? 0).toBe(0);
   });
 
@@ -90,5 +90,54 @@ describe("rate limit", () => {
     for (let i = 0; i < 4; i++) results.push(await hitRateLimit("test", "k1", { max: 3, windowSeconds: 60 }));
     expect(results).toEqual([false, false, false, true]);
     expect(await hitRateLimit("test", "other", { max: 3, windowSeconds: 60 })).toBe(false);
+  });
+});
+
+describe("UPI profile + payment emails", () => {
+  it("saves a valid UPI ID (normalized) and rejects a bad one", async () => {
+    await svc.updateProfile(2, "Asha", "INR", { id: "  Asha@OkAxis ", name: "Asha R" });
+    expect((await svc.upiProfiles([2])).get(2)).toEqual({ id: 2, upi_id: "asha@okaxis", upi_name: "Asha R" });
+    await expect(svc.updateProfile(2, "Asha", "INR", { id: "asha", name: "" })).rejects.toThrow("doesn't look like a UPI ID");
+    await svc.updateProfile(2, "Asha", "INR", { id: "", name: "" });
+    expect((await svc.upiProfiles([2])).get(2)?.upi_id).toBeNull();
+  });
+
+  it("stores the payment method and emails the recipient", async () => {
+    const { notifyPayments } = await import("../src/lib/payment-mail");
+    const id = await svc.recordPayment(1, { groupId: goa, from: 1, to: 2, amount: 12345, currency: "INR", note: "UPI ref 123", method: "upi" });
+    expect((await get<{ payment_method: string }>("SELECT payment_method FROM expenses WHERE id = ?", id))!.payment_method).toBe("upi");
+    const sent: { to: string; subject: string; text: string }[] = [];
+    const n = await notifyPayments([id], { actorId: 1, appBase: "https://splitly.test", send: async (m) => void sent.push(m) });
+    expect(n).toBe(1);
+    expect(sent[0]!.to).toBe("asha@example.com");
+    expect(sent[0]!.subject).toBe("Shivansh paid you ₹123.45");
+    expect(sent[0]!.text).toContain("Goa trip");
+    expect(sent[0]!.text).toContain("UPI ref 123");
+    expect(sent[0]!.text).toContain(`https://splitly.test/groups/${goa}`);
+  });
+
+  it("defaults to manual, skips emailing the person who recorded it, and never throws on mail failure", async () => {
+    const { notifyPayments } = await import("../src/lib/payment-mail");
+    const id = await svc.recordPayment(1, { groupId: goa, from: 3, to: 1, amount: 500, currency: "INR" });
+    expect((await get<{ payment_method: string }>("SELECT payment_method FROM expenses WHERE id = ?", id))!.payment_method).toBe("manual");
+    expect(await notifyPayments([id], { actorId: 1, appBase: "x", send: async () => { throw new Error("should not send to actor"); } })).toBe(0);
+    const id2 = await svc.recordPayment(1, { groupId: goa, from: 1, to: 3, amount: 700, currency: "INR" });
+    await expect(notifyPayments([id2], { actorId: 1, appBase: "x", send: async () => { throw new Error("SMTP down"); } })).resolves.toBe(0);
+  });
+
+  it("settling with a friend records UPI payments and sends one combined email", async () => {
+    const { notifyPayments } = await import("../src/lib/payment-mail");
+    // Asha "pays" Shivansh in two groups, so Shivansh ends up owing Asha in both.
+    await svc.recordPayment(1, { groupId: goa, from: 2, to: 1, amount: 4000000, currency: "INR" });
+    await svc.recordPayment(1, { groupId: flat, from: 2, to: 1, amount: 9000000, currency: "INR" });
+    expect((await svc.friendBalances(1)).get(2)!.INR).toBeLessThan(0);
+    const ids = await svc.settleWithFriend(1, 2, "INR", "upi");
+    expect(ids.length).toBe(2);
+    expect((await svc.friendBalances(1)).get(2)?.INR ?? 0).toBe(0);
+    const sent: { to: string; subject: string; text: string }[] = [];
+    expect(await notifyPayments(ids, { actorId: 1, appBase: "https://s.test", send: async (m) => void sent.push(m) })).toBe(1);
+    expect(sent[0]!.to).toBe("asha@example.com");
+    expect(sent[0]!.text).toContain("paid via UPI");
+    expect(sent[0]!.text).toContain("https://s.test/friends/1");
   });
 });

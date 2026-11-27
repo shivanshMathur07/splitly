@@ -25,6 +25,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const balances = await svc.groupBalances(group.id);
   const expenses = await svc.listGroupExpenses(group.id, { includeDeleted: deleted === "1" });
   const activity = await svc.listActivity(user.id, { groupId: group.id, limit: 10 });
+  const upi = await svc.upiProfiles(members.map((m) => m.id));
   const inviteUrl = `${await appUrl()}/invite/${group.invite_token}`;
 
   return (
@@ -75,7 +76,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
       <div className="grid gap-4 md:gap-6 lg:grid-cols-3">
         <div className="min-w-0 space-y-4 md:space-y-6 lg:col-span-2">
           <section className="card">
-            <SettlePanel group={group} balances={balances} members={members} userId={user.id} />
+            <SettlePanel group={group} balances={balances} members={members} userId={user.id} upi={upi} />
           </section>
           <section className="card">
             <div className="mb-2 flex items-center justify-between">
