@@ -5,7 +5,7 @@ import * as svc from "@/lib/services";
 import { formatMoney } from "@/lib/money";
 import { SPLIT_TYPES } from "@/lib/split";
 import { deleteExpenseAction } from "@/app/actions";
-import { Avatar, fmtDate, timeAgo } from "@/components/ui";
+import { Avatar, fmtDate, TimeAgo } from "@/components/ui";
 
 export default async function ExpensePage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
@@ -28,7 +28,7 @@ export default async function ExpensePage({ params }: { params: Promise<{ id: st
             <p className="muted mt-1">
               {fmtDate(e.date)} · {e.is_payment ? "Payment" : `${e.category?.name ?? "General"} · split ${SPLIT_TYPES.find((s) => s.value === e.split_type)?.label.toLowerCase()}`}
             </p>
-            <p className="text-xs text-slate-400">Added by {e.created_by_name} · updated {timeAgo(e.updated_at)}</p>
+            <p className="text-xs text-slate-400">Added by {e.created_by_name} · updated <TimeAgo at={e.updated_at} /></p>
           </div>
         </div>
 

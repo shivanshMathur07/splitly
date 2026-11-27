@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { devMailboxEnabled } from "@/lib/mail";
 import * as svc from "@/lib/services";
 import { clearMailboxAction } from "@/app/actions";
-import { timeAgo } from "@/components/ui";
+import { TimeAgo } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +32,7 @@ export default async function MailboxPage() {
         <article key={m.id} className="card" data-testid="mail">
           <div className="flex flex-wrap justify-between gap-2 text-sm">
             <p><span className="text-slate-500">To:</span> <b data-testid="mail-to">{m.to_email}</b></p>
-            <p className="text-xs text-slate-400">{timeAgo(m.created_at)}</p>
+            <p className="text-xs text-slate-400"><TimeAgo at={m.created_at} /></p>
           </div>
           <p className="mt-1 font-semibold">{m.subject}</p>
           <pre className="mt-3 whitespace-pre-wrap font-sans text-sm text-slate-700">{linkify(m.text_body)}</pre>

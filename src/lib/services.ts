@@ -5,6 +5,7 @@ import { buildShares, computeOwed, SplitError, type ShareRow, type SplitType } f
 import { netBalances, pairwiseDebts, simplifyDebts, type Transfer } from "./debts";
 import { formatMoney, isCurrency } from "./money";
 import { isValidVpa, normalizeVpa } from "./upi";
+import { todayIST } from "./time";
 import { GENERAL_CATEGORY_ID } from "./schema";
 
 export { SplitError };
@@ -406,7 +407,7 @@ export async function recordPayment(
       input.groupId,
       input.amount,
       input.currency,
-      input.date || new Date().toISOString().slice(0, 10),
+      input.date || todayIST(),
       GENERAL_CATEGORY_ID,
       input.note || null,
       actorId,

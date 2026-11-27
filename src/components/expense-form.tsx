@@ -5,6 +5,7 @@ import { saveExpenseAction, type ExpensePayload } from "@/app/actions";
 import { CURRENCIES, centsToInput, formatMoney, parseAmount, parseScaled } from "@/lib/money";
 import { computeOwed, SPLIT_TYPES, type SplitType } from "@/lib/split";
 import type { CategoryRow } from "@/lib/services";
+import { todayIST } from "@/lib/time";
 
 export interface Person {
   id: number;
@@ -31,10 +32,8 @@ export interface ExpenseInitial {
   seed: number;
 }
 
-const today = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
+// India date, identical on the server render and in the browser (no hydration drift, no device-TZ surprises).
+const today = () => todayIST();
 
 function parseSigned(v: string): number | null {
   const s = v.trim();

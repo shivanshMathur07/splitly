@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { all, closeDb, db, get, run, toPg, tx } from "../src/lib/db";
 import { hitRateLimit } from "../src/lib/rate-limit";
 import * as svc from "../src/lib/services";
@@ -139,5 +139,18 @@ describe("UPI profile + payment emails", () => {
     expect(sent[0]!.to).toBe("asha@example.com");
     expect(sent[0]!.text).toContain("paid via UPI");
     expect(sent[0]!.text).toContain("https://s.test/friends/1");
+  });
+});
+
+describe("India-time defaults", () => {
+  it("a payment recorded at 00:15 IST is dated that IST day", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-27T18:45:00Z"));
+    try {
+      const id = await svc.recordPayment(1, { groupId: goa, from: 1, to: 3, amount: 100, currency: "INR" });
+      expect((await get<{ date: string }>("SELECT date FROM expenses WHERE id = ?", id))!.date).toBe("2026-11-28");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

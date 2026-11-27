@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ActivityRow } from "@/lib/services";
 import { displayName } from "@/lib/services";
-import { Avatar, Empty, timeAgo } from "./ui";
+import { Avatar, Empty, TimeAgo } from "./ui";
 
 const ICON: Record<string, string> = {
   expense_added: "➕",
@@ -32,7 +32,7 @@ export function ActivityList({ items, userId }: { items: ActivityRow[]; userId: 
                 <b>{who}</b> {a.summary}
                 {a.group_name && <span className="text-slate-500"> in {a.group_name}</span>}
               </p>
-              <p className="text-xs text-slate-400">{timeAgo(a.created_at)}</p>
+              <p className="text-xs text-slate-400"><TimeAgo at={a.created_at} /></p>
             </div>
           </div>
         );

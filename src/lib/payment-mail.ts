@@ -4,6 +4,7 @@ import { all } from "./db";
 import { linkEmail, sendMail, type MailMessage } from "./mail";
 import { formatMoney } from "./money";
 import { displayName } from "./services";
+import { formatDateIST } from "./time";
 
 interface PaymentRow {
   id: number;
@@ -40,7 +41,7 @@ async function loadPayments(ids: number[]): Promise<PaymentRow[]> {
   );
 }
 
-const fmtDay = (d: string) => new Date(`${d.slice(0, 10)}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+const fmtDay = (d: string) => formatDateIST(d.slice(0, 10));
 
 /** Build one email per (payer → recipient, currency) covering the given payment rows. */
 export function paymentEmails(rows: PaymentRow[], appBase: string): MailMessage[] {

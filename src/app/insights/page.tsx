@@ -4,13 +4,14 @@ import * as svc from "@/lib/services";
 import { formatMoney, isCurrency } from "@/lib/money";
 import { CategoryChart, MonthlyChart, PersonChart } from "@/components/charts";
 import { Empty } from "@/components/ui";
+import { addDays, monthStartIST, todayIST, yearStartIST } from "@/lib/time";
 
-const iso = (d: Date) => d.toISOString().slice(0, 10);
+// Presets are IST calendar ranges (expense dates are IST dates).
 function preset(p: string): { from?: string; to?: string } {
-  const now = new Date();
-  if (p === "month") return { from: iso(new Date(now.getFullYear(), now.getMonth(), 1)), to: iso(now) };
-  if (p === "30d") return { from: iso(new Date(Date.now() - 29 * 86400000)), to: iso(now) };
-  if (p === "year") return { from: `${now.getFullYear()}-01-01`, to: iso(now) };
+  const today = todayIST();
+  if (p === "month") return { from: monthStartIST(), to: today };
+  if (p === "30d") return { from: addDays(today, -29), to: today };
+  if (p === "year") return { from: yearStartIST(), to: today };
   return {};
 }
 

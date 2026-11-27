@@ -1,3 +1,4 @@
+import { formatDateIST, formatDateTimeIST, parseInstant, timeAgoIST } from "@/lib/time";
 import { formatMoney } from "@/lib/money";
 
 const COLORS = ["#0d9488", "#6366f1", "#f97316", "#ec4899", "#0ea5e9", "#84cc16", "#a855f7", "#eab308", "#ef4444", "#14b8a6"];
@@ -49,17 +50,20 @@ export function Empty({ title, children, icon, action }: { title: string; childr
   );
 }
 
+/** Dates and times are always shown in India time (see lib/time.ts). */
 export function fmtDate(d: string) {
-  const date = new Date(d.length === 10 ? `${d}T00:00:00` : d.replace(" ", "T") + "Z");
-  return date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  return formatDateIST(d);
 }
 
 export function timeAgo(sqlTime: string) {
-  const t = new Date(sqlTime.replace(" ", "T") + "Z").getTime();
-  const s = Math.max(0, (Date.now() - t) / 1000);
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  if (s < 86400 * 7) return `${Math.floor(s / 86400)}d ago`;
-  return fmtDate(sqlTime);
+  return timeAgoIST(sqlTime);
+}
+
+/** Relative time with the exact IST timestamp on hover / long-press. */
+export function TimeAgo({ at, className }: { at: string; className?: string }) {
+  return (
+    <time dateTime={parseInstant(at).toISOString()} title={formatDateTimeIST(at)} className={className}>
+      {timeAgoIST(at)}
+    </time>
+  );
 }

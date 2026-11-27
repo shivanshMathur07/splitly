@@ -1,11 +1,9 @@
 // Demo data used by `npm run setup` / `npm run seed`.
 import { get, run } from "../src/lib/db";
+import { addDays, todayIST } from "../src/lib/time";
 import * as svc from "../src/lib/services";
 
-const daysAgo = (n: number) => {
-  const d = new Date(Date.now() - n * 86400000);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
+const daysAgo = (n: number) => addDays(todayIST(), -n);
 const cat = async (name: string) => (await get<{ id: number }>("SELECT id FROM categories WHERE name = ?", name))?.id ?? 1;
 
 export async function seedDemo(ownerEmail = "shivansh@example.com") {
